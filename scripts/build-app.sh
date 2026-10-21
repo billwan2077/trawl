@@ -37,5 +37,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP"
-echo "Built $APP"
+# Sign with a stable identity so macOS privacy grants (Downloads, Full Disk Access, ...)
+# survive rebuilds; ad-hoc signatures change on every build and lose them.
+# Override with TRAWL_SIGN_IDENTITY="<name or SHA-1>" or TRAWL_SIGN_IDENTITY=- for ad-hoc.
+IDENTITY="${TRAWL_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk -F'"' '/"Apple Development: /{print $2; exit}')}"
+IDENTITY="${IDENTITY:--}"
+codesign --force --timestamp=none --sign "$IDENTITY" "$APP"
+echo "Built $APP (signed: ${IDENTITY/#-/ad-hoc})"

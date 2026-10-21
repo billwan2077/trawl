@@ -57,6 +57,8 @@ final class SearchModel: ObservableObject {
     /// Engines used by the current or last search.
     @Published private(set) var activeEngines: SearchSources = []
     @Published private(set) var notice: String?
+    /// Folders the last search was not allowed to read.
+    @Published private(set) var unreadableFolders: [URL] = []
 
     private var task: Task<Void, Never>?
 
@@ -94,6 +96,7 @@ final class SearchModel: ObservableObject {
         finishedEngines = []
         activeEngines = options.engines
         notice = nil
+        unreadableFolders = []
         results = []
         groupCounts = [:]
         resultFilter = []
@@ -117,6 +120,8 @@ final class SearchModel: ObservableObject {
                     finishedEngines.formUnion(engine)
                 case .notice(let text):
                     notice = text
+                case .unreadable(let urls):
+                    unreadableFolders.append(contentsOf: urls)
                 case let .progress(count, folder):
                     scanned = count
                     currentFolder = folder

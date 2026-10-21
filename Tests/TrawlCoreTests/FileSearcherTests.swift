@@ -61,6 +61,23 @@ final class FileSearcherTests: XCTestCase {
         XCTAssertEqual(folders, [])
     }
 
+    func testUnreadableFoldersAreReported() async throws {
+        let locked = root.appendingPathComponent("locked")
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try "x".write(to: locked.appendingPathComponent("q3-secret.txt"), atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+
+        var unreadable: [String] = []
+        var found: [String] = []
+        for await event in FileSearcher.search(SearchOptions(roots: [root]), matcher: try Matcher(query: "q3")) {
+            if case .unreadable(let urls) = event { unreadable += urls.map(\.lastPathComponent) }
+            if case .results(let batch) = event { found += batch.map(\.name) }
+        }
+        XCTAssertEqual(unreadable, ["locked"])
+        XCTAssertEqual(found.sorted(), ["Q3.docx", "q3.xlsx"])
+    }
+
     func testCategoryLookup() {
         XCTAssertEqual(FileCategory(fileExtension: "PPTX"), .powerpoint)
         XCTAssertEqual(FileCategory(url: URL(fileURLWithPath: "/a/photo.heic")), .image)

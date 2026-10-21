@@ -74,7 +74,9 @@ Regex mode: the whole query is one ICU regular expression, matched anywhere.
 - Row actions: double-click opens; context menu: Open, Reveal in Finder, Copy Path,
   Move to Trash (confirmation dialog); rows can be dragged to other apps.
 - Status bar: number of results, results per engine (with "…" while an engine runs), files
-  scanned, elapsed time, current folder while running, and why Spotlight was skipped.
+  scanned, elapsed time, current folder while running, and why Spotlight was skipped. When
+  macOS refused access to folders, an orange "N folders couldn't be read" button opens a list
+  of them and a shortcut to Privacy & Security settings.
 
 ## Spotlight
 
@@ -125,11 +127,14 @@ Spotlight simply returns nothing and the folder scan still runs.
 - `scripts/make-icon.sh`: draws the icon (`scripts/draw-icon.swift`) and writes
   `Assets/AppIcon.icns`.
 - `scripts/build-app.sh`: release build, wraps the binary in `Trawl.app` with an
-  `Info.plist`, ad-hoc signs it.
+  `Info.plist`, and signs it with the first "Apple Development" identity in the keychain
+  (ad-hoc if none; override with `TRAWL_SIGN_IDENTITY`). A stable identity keeps macOS
+  privacy grants across rebuilds; an ad-hoc signature changes with every build.
 
 ## Permissions
 
 Unindexed search reads files directly, so macOS privacy protection applies: Desktop,
 Documents, Downloads, and removable volumes trigger one-time prompts, and folders such as
 Mail or Messages are only readable after granting Trawl **Full Disk Access** in
-System Settings → Privacy & Security. Unreadable folders are skipped silently.
+System Settings → Privacy & Security. Spotlight also hides results in folders Trawl may not
+read. Unreadable folders are skipped and listed in the status bar.

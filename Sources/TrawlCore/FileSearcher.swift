@@ -57,6 +57,8 @@ public enum SearchEvent: Sendable {
     case engineFinished(SearchSources, count: Int)
     /// Something the user should know, e.g. why Spotlight was not used.
     case notice(String)
+    /// Folders the walk was not allowed to read (macOS privacy settings or file permissions).
+    case unreadable([URL])
     case finished(scanned: Int)
 }
 
@@ -92,10 +94,13 @@ public enum FileSearcher {
         var scanned = 0
         var pending: [SearchResult] = []
         var lastFlush = Date()
+        let denied = DeniedFolders()
 
         func flush(folder: String, force: Bool = false) {
             guard force || Date().timeIntervalSince(lastFlush) > 0.15 else { return }
             if !pending.isEmpty { continuation.yield(.results(pending)); pending.removeAll() }
+            let newlyDenied = denied.drain()
+            if !newlyDenied.isEmpty { continuation.yield(.unreadable(newlyDenied)) }
             continuation.yield(.progress(scanned: scanned, folder: folder))
             lastFlush = Date()
         }
@@ -104,7 +109,10 @@ public enum FileSearcher {
             var running = 0
             for root in normalizedRoots(options.roots) {
                 guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: keys,
-                                                     options: enumOptions, errorHandler: { _, _ in true })
+                                                     options: enumOptions, errorHandler: { url, error in
+                    if isPermissionDenied(error) { denied.add(url) }
+                    return true
+                })
                 else { continue }
                 while let url = enumerator.nextObject() as? URL {
                     if Task.isCancelled { group.cancelAll(); return }
@@ -150,6 +158,14 @@ public enum FileSearcher {
                      sources: .walk)
     }
 
+    static func isPermissionDenied(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain, ns.code == NSFileReadNoPermissionError { return true }
+        let posix = ns.domain == NSPOSIXErrorDomain ? ns : ns.userInfo[NSUnderlyingErrorKey] as? NSError
+        guard let posix, posix.domain == NSPOSIXErrorDomain else { return false }
+        return posix.code == Int(EPERM) || posix.code == Int(EACCES)
+    }
+
     /// Drops duplicate roots and roots nested inside another root.
     static func normalizedRoots(_ roots: [URL]) -> [URL] {
         let paths = Set(roots.map { $0.standardizedFileURL.path })
@@ -166,5 +182,20 @@ public enum FileSearcher {
         }
         if data.prefix(8192).contains(0) { return nil }
         return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+    }
+}
+
+/// Folders the enumerator could not open, collected from its error handler.
+private final class DeniedFolders: @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [URL] = []
+
+    func add(_ url: URL) { lock.withLock { urls.append(url) } }
+
+    func drain() -> [URL] {
+        lock.withLock {
+            defer { urls.removeAll() }
+            return urls
+        }
     }
 }

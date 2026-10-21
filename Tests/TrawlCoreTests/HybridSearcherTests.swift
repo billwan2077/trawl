@@ -102,7 +102,7 @@ final class HybridSearcherTests: XCTestCase {
             case .engineFinished(let engine, _): finished.formUnion(engine)
             case .notice(let text): notices.append(text)
             case .finished: ended = true
-            case .progress: break
+            case .progress, .unreadable: break
             }
         }
         XCTAssertEqual(sources, ["report.txt": [.spotlight, .walk], "memo.docx": .spotlight])

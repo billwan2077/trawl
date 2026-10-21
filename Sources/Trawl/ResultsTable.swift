@@ -78,6 +78,7 @@ struct ResultsTable: View {
 
 struct StatusBar: View {
     @EnvironmentObject private var model: SearchModel
+    @State private var showingUnreadable = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -88,6 +89,19 @@ struct StatusBar: View {
                 Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
             } else {
                 Text(summary).monospacedDigit()
+            }
+            if !model.unreadableFolders.isEmpty {
+                let count = model.unreadableFolders.count
+                Button { showingUnreadable = true } label: {
+                    Label("\(count.formatted()) \(count == 1 ? "folder" : "folders") couldn't be read",
+                          systemImage: "lock.fill")
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.borderless)
+                .help("Show folders macOS did not let Trawl read")
+                .popover(isPresented: $showingUnreadable, arrowEdge: .top) {
+                    UnreadableFolders(urls: model.unreadableFolders)
+                }
             }
             Spacer()
             if let notice = model.notice, !model.isSearching {
@@ -144,5 +158,38 @@ private struct FoundBy: View {
         case .spotlight: "Found by Spotlight only"
         default: "Found by the folder scan only"
         }
+    }
+}
+
+/// Lists folders the search could not read and points to the privacy settings that unlock them.
+private struct UnreadableFolders: View {
+    let urls: [URL]
+    private static let privacySettings =
+        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Folders Trawl couldn't read").font(.headline)
+            Text("""
+                macOS blocked access to these folders, so files in them are missing from both the \
+                folder scan and Spotlight results. To include them, allow Trawl under Full Disk Access \
+                (or Files and Folders) in Privacy & Security, then search again.
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            List(urls.prefix(500), id: \.self) { url in
+                Text(url.path).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            .frame(height: min(CGFloat(urls.count) * 24 + 12, 240))
+            HStack {
+                if urls.count > 500 { Text("Showing 500 of \(urls.count.formatted())").foregroundStyle(.secondary) }
+                Spacer()
+                Button("Open Privacy & Security…") { NSWorkspace.shared.open(Self.privacySettings) }
+            }
+        }
+        .padding(14)
+        .frame(width: 460)
     }
 }
