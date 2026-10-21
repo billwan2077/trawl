@@ -121,7 +121,9 @@ final class SearchModel: ObservableObject {
                 case .notice(let text):
                     notice = text
                 case .unreadable(let urls):
-                    unreadableFolders.append(contentsOf: urls)
+                    // The folder scan and the Spotlight check can both report the same folder.
+                    let known = Set(unreadableFolders.map(\.standardizedFileURL.path))
+                    unreadableFolders += urls.filter { !known.contains($0.standardizedFileURL.path) }
                 case let .progress(count, folder):
                     scanned = count
                     currentFolder = folder

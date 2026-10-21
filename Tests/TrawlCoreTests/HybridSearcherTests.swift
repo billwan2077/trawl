@@ -86,8 +86,10 @@ final class HybridSearcherTests: XCTestCase {
         options.target = .both
         let matcher = try Matcher(query: "report")
         let walk = FileSearcher.search(options, matcher: matcher)
-        let spotlight = AsyncStream<[String]> { $0.yield([path("report.txt"), path("memo.docx")]); $0.finish() }
-        let stream = HybridSearcher.merge(walk: walk, spotlight: spotlight, notice: "note") {
+        let paths = [path("report.txt"), path("memo.docx")]
+        let spotlight: @Sendable () -> AsyncStream<[String]> = { AsyncStream { $0.yield(paths); $0.finish() } }
+        let stream = HybridSearcher.merge(walk: walk, spotlight: spotlight, notice: "note",
+                                          preflight: { [URL(fileURLWithPath: "/blocked")] }) {
             HybridSearcher.verify($0, options: options, matcher: matcher, contentHitsAllowed: true)
         }
 
@@ -95,6 +97,7 @@ final class HybridSearcherTests: XCTestCase {
         var finished: SearchSources = []
         var notices: [String] = []
         var ended = false
+        var unreadable: [URL] = []
         for await event in stream {
             switch event {
             case .results(let batch): batch.forEach { sources[$0.name, default: []].formUnion($0.sources) }
@@ -102,13 +105,31 @@ final class HybridSearcherTests: XCTestCase {
             case .engineFinished(let engine, _): finished.formUnion(engine)
             case .notice(let text): notices.append(text)
             case .finished: ended = true
-            case .progress, .unreadable: break
+            case .unreadable(let urls): unreadable += urls
+            case .progress: break
             }
         }
         XCTAssertEqual(sources, ["report.txt": [.spotlight, .walk], "memo.docx": .spotlight])
         XCTAssertEqual(finished, [.spotlight, .walk])
         XCTAssertEqual(notices, ["note"])
+        XCTAssertEqual(unreadable.map(\.path), ["/blocked"])
         XCTAssertTrue(ended)
+    }
+
+    func testProtectedFolderCheck() throws {
+        let locked = root.appendingPathComponent("Locked"), open = root.appendingPathComponent("Open")
+        try FileManager.default.createDirectory(at: locked.appendingPathComponent("inner"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: open, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+
+        let protected = [locked, open, URL(fileURLWithPath: "/somewhere/else")]
+        XCTAssertEqual(HybridSearcher.unreadableProtectedFolders(roots: [root], protected: protected).map(\.lastPathComponent),
+                       ["Locked"])
+        XCTAssertEqual(HybridSearcher.unreadableProtectedFolders(roots: [locked.appendingPathComponent("inner")],
+                                                                 protected: protected).map(\.lastPathComponent),
+                       ["Locked"], "a search folder inside a blocked folder reports that folder")
+        XCTAssertEqual(HybridSearcher.unreadableProtectedFolders(roots: [open], protected: protected), [])
     }
 
     func testMergeWithNoEnginesFinishes() async {

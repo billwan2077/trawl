@@ -11,18 +11,21 @@ public enum HybridSearcher {
         let matcher = try Matcher(query: query, options: options.match)
 
         var notice: String?
-        var spotlight: AsyncStream<[String]>?
+        var spotlight: (@Sendable () -> AsyncStream<[String]>)?
         if options.engines.contains(.spotlight) {
             switch SpotlightQueryBuilder.plan(for: query, options: options) {
             case .query(let string):
-                spotlight = SpotlightSearcher.paths(query: string, scopes: FileSearcher.normalizedRoots(options.roots))
+                let scopes = FileSearcher.normalizedRoots(options.roots)
+                spotlight = { SpotlightSearcher.paths(query: string, scopes: scopes) }
             case .skip(let reason):
                 notice = reason
             }
         }
         let contentHitsAllowed = !((try? QueryParser.parse(query))?.containsNot ?? true)
         let walk = options.engines.contains(.walk) ? FileSearcher.search(options, matcher: matcher) : nil
-        return merge(walk: walk, spotlight: spotlight, notice: notice) { path in
+        let roots = options.roots
+        return merge(walk: walk, spotlight: spotlight, notice: notice,
+                     preflight: { unreadableProtectedFolders(roots: roots) }) { path in
             verify(path, options: options, matcher: matcher, contentHitsAllowed: contentHitsAllowed)
         }
     }
@@ -33,7 +36,10 @@ public enum HybridSearcher {
         case spotlightDone
     }
 
-    static func merge(walk: AsyncStream<SearchEvent>?, spotlight: AsyncStream<[String]>?, notice: String?,
+    /// `spotlight` is started only after `preflight` has run, so a folder the user allows in
+    /// the macOS prompt that `preflight` triggers is already readable when Spotlight is asked.
+    static func merge(walk: AsyncStream<SearchEvent>?, spotlight: (@Sendable () -> AsyncStream<[String]>)?,
+                      notice: String?, preflight: @escaping @Sendable () -> [URL] = { [] },
                       verify: @escaping @Sendable (String) -> SearchResult?) -> AsyncStream<SearchEvent> {
         AsyncStream { continuation in
             let task = Task.detached(priority: .userInitiated) {
@@ -45,7 +51,9 @@ public enum HybridSearcher {
                     }
                     if let spotlight {
                         group.addTask {
-                            for await paths in spotlight {
+                            let blocked = preflight()
+                            if !blocked.isEmpty { continuation.yield(.unreadable(blocked)) }
+                            for await paths in spotlight() {
                                 innerContinuation.yield(.spotlight(paths.compactMap(verify)))
                             }
                             innerContinuation.yield(.spotlightDone)
@@ -98,6 +106,29 @@ public enum HybridSearcher {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
+
+    /// The macOS-protected folders (Desktop, Documents, Downloads) that overlap the search
+    /// folders and cannot be read. Spotlight silently hides results in such folders, so they
+    /// are reported instead. Reading them also makes macOS ask the user for access the first time.
+    static func unreadableProtectedFolders(roots: [URL], protected: [URL] = defaultProtectedFolders) -> [URL] {
+        let rootPaths = FileSearcher.normalizedRoots(roots).map(\.path)
+        var blocked: [URL] = []
+        for folder in protected.map(\.standardizedFileURL) {
+            let path = folder.path
+            // Relevant when it lies inside a search folder or a search folder lies inside it.
+            let overlaps = rootPaths.contains {
+                $0 == path || $0 == "/" || path.hasPrefix($0 + "/") || $0.hasPrefix(path + "/")
+            }
+            guard overlaps else { continue }
+            do { _ = try FileManager.default.contentsOfDirectory(atPath: path) } catch {
+                if FileSearcher.isPermissionDenied(error) { blocked.append(folder) }
+            }
+        }
+        return blocked
+    }
+
+    static let defaultProtectedFolders: [URL] = [.desktopDirectory, .documentDirectory, .downloadsDirectory]
+        .compactMap { FileManager.default.urls(for: $0, in: .userDomainMask).first }
 
     /// Turns a Spotlight path into a result if it still exists and passes the search options.
     static func verify(_ path: String, options: SearchOptions, matcher: Matcher,

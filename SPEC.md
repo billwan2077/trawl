@@ -105,6 +105,11 @@ inside a chosen folder, pass the type/hidden/package/folder options, and, for na
 the query exactly with `Matcher` (so NOT still applies). Content-only hits are kept only
 when the query has no NOT, because text inside Office/PDF files cannot be re-checked.
 
+Before Spotlight is queried, Trawl reads the macOS-protected folders (Desktop, Documents,
+Downloads) that overlap the search folders. Spotlight silently hides results in protected
+folders an app may not read, so this both triggers the macOS permission prompt on first use
+and lets the status bar list the folders that stay blocked, in every engine mode.
+
 Spotlight is skipped, with a note in the status bar, for regex queries, queries with no
 positive term (e.g. `NOT draft`), and content searches containing NOT. With indexing off,
 Spotlight simply returns nothing and the folder scan still runs.
