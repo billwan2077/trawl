@@ -31,7 +31,20 @@ final class SearchModel: ObservableObject {
     }
 
     @Published var query = ""
-    @Published var roots: [URL] { didSet { saveRoots() } }
+    @Published var roots: [URL] {
+        didSet {
+            saveRoots()
+            if let folderFilter, !roots.contains(folderFilter) { self.folderFilter = nil }
+        }
+    }
+    /// Folder picked in the sidebar: only results inside it are shown, and the next search
+    /// covers only it. Nil means all folders.
+    @Published var folderFilter: URL? {
+        didSet {
+            recount()
+            refilter()
+        }
+    }
     /// File types the search looks at; empty means all files.
     @Published var searchTypes: Set<FileCategory> = SearchModel.loadSearchTypes() {
         didSet { Self.defaults.set(searchTypes.map(\.rawValue).sorted(), forKey: "searchTypes") }
@@ -73,7 +86,7 @@ final class SearchModel: ObservableObject {
         errorMessage = nil
         guard !roots.isEmpty else { errorMessage = "Add a folder to search."; return }
 
-        var options = SearchOptions(roots: roots)
+        var options = SearchOptions(roots: folderFilter.map { [$0] } ?? roots)
         options.target = target
         options.match = MatchOptions(caseSensitive: caseSensitive, useRegex: useRegex)
         options.includeHidden = includeHidden
@@ -162,7 +175,7 @@ final class SearchModel: ObservableObject {
         allResults.removeAll { urls.contains($0.url) }
         results.removeAll { urls.contains($0.url) }
         urls.forEach { sourcesByURL[$0] = nil }
-        groupCounts = Dictionary(grouping: allResults, by: \.group).mapValues(\.count)
+        recount()
     }
 
     func toggleFilter(_ group: ResultGroup) {
@@ -171,16 +184,28 @@ final class SearchModel: ObservableObject {
 
     private func append(_ batch: [SearchResult]) {
         allResults.append(contentsOf: batch)
-        for result in batch { groupCounts[result.group, default: 0] += 1 }
-        let shown = resultFilter.isEmpty ? batch : batch.filter { resultFilter.contains($0.group) }
+        let scoped = folderFilter == nil ? batch : batch.filter(isInFolder)
+        for result in scoped { groupCounts[result.group, default: 0] += 1 }
+        let shown = resultFilter.isEmpty ? scoped : scoped.filter { resultFilter.contains($0.group) }
         guard !shown.isEmpty else { return }
         results.append(contentsOf: shown)
         if !sortOrder.isEmpty { results.sort(using: sortOrder) }
     }
 
     private func refilter() {
-        let shown = resultFilter.isEmpty ? allResults : allResults.filter { resultFilter.contains($0.group) }
+        let shown = allResults.filter { isInFolder($0) && (resultFilter.isEmpty || resultFilter.contains($0.group)) }
         results = sortOrder.isEmpty ? shown : shown.sorted(using: sortOrder)
+    }
+
+    /// Type counts for the filter bar, limited to the selected folder.
+    private func recount() {
+        let scoped = folderFilter == nil ? allResults : allResults.filter(isInFolder)
+        groupCounts = Dictionary(grouping: scoped, by: \.group).mapValues(\.count)
+    }
+
+    private func isInFolder(_ result: SearchResult) -> Bool {
+        guard let folder = folderFilter?.standardizedFileURL.path else { return true }
+        return folder == "/" || result.url.standardizedFileURL.path.hasPrefix(folder + "/")
     }
 
     private static func loadSearchTypes() -> Set<FileCategory> {

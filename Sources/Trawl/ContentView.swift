@@ -97,10 +97,26 @@ struct ContentView: View {
 
 private struct FolderList: View {
     @EnvironmentObject private var model: SearchModel
-    @State private var selected: URL?
+
+    private enum Item: Hashable {
+        case all
+        case folder(URL)
+    }
+
+    /// Selecting a folder filters results to it; "All Folders" clears the filter.
+    private var selection: Binding<Item?> {
+        Binding(
+            get: { model.folderFilter.map(Item.folder) ?? .all },
+            set: { item in
+                if case .folder(let url) = item { model.folderFilter = url } else { model.folderFilter = nil }
+            })
+    }
 
     var body: some View {
-        List(selection: $selected) {
+        List(selection: selection) {
+            Label("All Folders", systemImage: "square.stack.3d.up")
+                .help("Show results from every folder and search them all")
+                .tag(Item.all)
             Section("Search In") {
                 ForEach(model.roots, id: \.self) { url in
                     Label {
@@ -109,13 +125,13 @@ private struct FolderList: View {
                         Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                             .resizable().frame(width: 16, height: 16)
                     }
-                    .help(url.path)
-                    .tag(url)
+                    .help("\(url.path)\nShow only results in this folder; the next search covers only it.")
+                    .tag(Item.folder(url))
                 }
                 .onDelete { model.roots.remove(atOffsets: $0) }
             }
         }
-        .onDeleteCommand { if let selected { model.roots.removeAll { $0 == selected } } }
+        .onDeleteCommand(perform: removeSelected)
         .dropDestination(for: URL.self) { urls, _ in
             let folders = urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             model.addRoots(folders)
@@ -125,15 +141,18 @@ private struct FolderList: View {
             HStack(spacing: 4) {
                 Button { model.chooseFolders() } label: { Image(systemName: "plus") }
                     .help("Add folders to search")
-                Button {
-                    if let selected { model.roots.removeAll { $0 == selected } }
-                } label: { Image(systemName: "minus") }
-                    .disabled(selected == nil)
+                Button(action: removeSelected) { Image(systemName: "minus") }
+                    .disabled(model.folderFilter == nil)
                     .help("Remove the selected folder")
                 Spacer()
             }
             .buttonStyle(.borderless)
             .padding(8)
         }
+    }
+
+    private func removeSelected() {
+        guard let folder = model.folderFilter else { return }
+        model.roots.removeAll { $0 == folder }
     }
 }

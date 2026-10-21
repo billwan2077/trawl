@@ -64,7 +64,9 @@ Regex mode: the whole query is one ICU regular expression, matched anywhere.
 
 - Toolbar: search field (Return starts the search), target picker, Search/Stop button,
   options menu.
-- Sidebar: folder list with add/remove.
+- Sidebar: "All Folders" plus the folder list, with add/remove. Selecting a folder shows
+  only results inside it (type counts follow), and the next search covers only that folder;
+  "All Folders" shows and searches everything again.
 - Filter bar above the results: one button per type present in the results (system icon,
   e.g. the Word/Excel/PowerPoint document icons, plus a count). Clicking a type shows only
   that type; clicking more types combines them; "All" clears the filter. It filters the
