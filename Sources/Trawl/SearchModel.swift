@@ -26,6 +26,10 @@ final class SearchModel: ObservableObject {
         didSet { Self.defaults.set(includeFolders, forKey: "includeFolders") }
     }
 
+    @Published var engineMode = EngineMode(rawValue: defaults.string(forKey: "engineMode") ?? "") ?? .both {
+        didSet { Self.defaults.set(engineMode.rawValue, forKey: "engineMode") }
+    }
+
     @Published var query = ""
     @Published var roots: [URL] { didSet { saveRoots() } }
     /// File types the search looks at; empty means all files.
@@ -45,6 +49,14 @@ final class SearchModel: ObservableObject {
     @Published private(set) var currentFolder = ""
     @Published private(set) var elapsed: TimeInterval?
     @Published private(set) var errorMessage: String?
+    /// Which engines found each result.
+    @Published private(set) var sourcesByURL: [URL: SearchSources] = [:]
+    /// Results found per engine, counting duplicates.
+    @Published private(set) var engineCounts: [SearchSources: Int] = [:]
+    @Published private(set) var finishedEngines: SearchSources = []
+    /// Engines used by the current or last search.
+    @Published private(set) var activeEngines: SearchSources = []
+    @Published private(set) var notice: String?
 
     private var task: Task<Void, Never>?
 
@@ -57,13 +69,6 @@ final class SearchModel: ObservableObject {
     func start() {
         stop()
         errorMessage = nil
-        let matcher: Matcher
-        do {
-            matcher = try Matcher(query: query, options: MatchOptions(caseSensitive: caseSensitive, useRegex: useRegex))
-        } catch {
-            errorMessage = error.localizedDescription
-            return
-        }
         guard !roots.isEmpty else { errorMessage = "Add a folder to search."; return }
 
         var options = SearchOptions(roots: roots)
@@ -73,8 +78,22 @@ final class SearchModel: ObservableObject {
         options.searchPackages = searchPackages
         options.includeFolders = includeFolders
         options.fileTypes = searchTypes
+        options.engines = engineMode.sources
+
+        let stream: AsyncStream<SearchEvent>
+        do {
+            stream = try HybridSearcher.search(query: query, options: options)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
 
         allResults = []
+        sourcesByURL = [:]
+        engineCounts = [:]
+        finishedEngines = []
+        activeEngines = options.engines
+        notice = nil
         results = []
         groupCounts = [:]
         resultFilter = []
@@ -83,10 +102,21 @@ final class SearchModel: ObservableObject {
         isSearching = true
         let started = Date()
         task = Task {
-            for await event in FileSearcher.search(options, matcher: matcher) {
+            for await event in stream {
                 switch event {
                 case .results(let batch):
+                    for result in batch {
+                        sourcesByURL[result.url] = result.sources
+                        engineCounts[result.sources, default: 0] += 1
+                    }
                     append(batch)
+                case let .sourcesAdded(urls, source):
+                    for url in urls { sourcesByURL[url, default: []].formUnion(source) }
+                    engineCounts[source, default: 0] += urls.count
+                case .engineFinished(let engine, _):
+                    finishedEngines.formUnion(engine)
+                case .notice(let text):
+                    notice = text
                 case let .progress(count, folder):
                     scanned = count
                     currentFolder = folder
@@ -124,6 +154,7 @@ final class SearchModel: ObservableObject {
     func removeFromResults(_ urls: Set<URL>) {
         allResults.removeAll { urls.contains($0.url) }
         results.removeAll { urls.contains($0.url) }
+        urls.forEach { sourcesByURL[$0] = nil }
         groupCounts = Dictionary(grouping: allResults, by: \.group).mapValues(\.count)
     }
 
@@ -151,6 +182,22 @@ final class SearchModel: ObservableObject {
 
     private func saveRoots() {
         UserDefaults.standard.set(roots.map(\.path), forKey: "roots")
+    }
+}
+
+enum EngineMode: String, CaseIterable, Identifiable {
+    case both = "Spotlight + Folder Scan"
+    case walk = "Folder Scan Only"
+    case spotlight = "Spotlight Only"
+
+    var id: String { rawValue }
+
+    var sources: SearchSources {
+        switch self {
+        case .both: [.spotlight, .walk]
+        case .walk: .walk
+        case .spotlight: .spotlight
+        }
     }
 }
 

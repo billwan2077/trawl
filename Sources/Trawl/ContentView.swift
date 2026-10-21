@@ -61,6 +61,11 @@ struct ContentView: View {
         }
         ToolbarItem {
             Menu {
+                Picker("Search Engine", selection: $model.engineMode) {
+                    ForEach(EngineMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.inline)
+                Divider()
                 Toggle("Case Sensitive", isOn: $model.caseSensitive)
                 Toggle("Regular Expression", isOn: $model.useRegex)
                 Divider()

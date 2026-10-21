@@ -38,6 +38,10 @@ struct ResultsTable: View {
                 Text(result.kind).lineLimit(1)
             }
             .width(min: 70, ideal: 120)
+            TableColumn("Found By") { result in
+                FoundBy(sources: model.sourcesByURL[result.url] ?? result.sources)
+            }
+            .width(min: 56, ideal: 64)
         }
         .contextMenu(forSelectionType: URL.self) { urls in
             if !urls.isEmpty {
@@ -86,6 +90,9 @@ struct StatusBar: View {
                 Text(summary).monospacedDigit()
             }
             Spacer()
+            if let notice = model.notice, !model.isSearching {
+                Label(notice, systemImage: "info.circle").foregroundStyle(.secondary).lineLimit(1)
+            }
             if model.isSearching {
                 Text(model.currentFolder).lineLimit(1).truncationMode(.head).foregroundStyle(.secondary)
             }
@@ -100,10 +107,42 @@ struct StatusBar: View {
         let shown = model.results.count
         var items = "\(total.formatted()) \(total == 1 ? "item" : "items")"
         if shown != total { items = "\(shown.formatted()) of \(items)" }
-        let scanned = "\(model.scanned.formatted()) scanned"
-        if let elapsed = model.elapsed {
-            return "\(items) · \(scanned) · \(elapsed.formatted(.number.precision(.fractionLength(1)))) s"
+        guard model.isSearching || model.elapsed != nil else { return "Press Return to search" }
+        var parts = [items]
+        for (engine, title) in [(SearchSources.spotlight, "Spotlight"), (.walk, "Scan")]
+        where model.activeEngines.contains(engine) {
+            let running = model.isSearching && !model.finishedEngines.contains(engine) ? "…" : ""
+            parts.append("\(title) \((model.engineCounts[engine] ?? 0).formatted())\(running)")
         }
-        return model.isSearching ? "\(items) · \(scanned)" : "Press Return to search"
+        if model.activeEngines.contains(.walk) { parts.append("\(model.scanned.formatted()) scanned") }
+        if let elapsed = model.elapsed {
+            parts.append("\(elapsed.formatted(.number.precision(.fractionLength(1)))) s")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Icons showing which engines found a result.
+private struct FoundBy: View {
+    let sources: SearchSources
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if sources.contains(.spotlight) {
+                Image(systemName: "magnifyingglass.circle.fill").foregroundStyle(.blue)
+            }
+            if sources.contains(.walk) {
+                Image(systemName: "folder.fill").foregroundStyle(.secondary)
+            }
+        }
+        .help(help)
+    }
+
+    private var help: String {
+        switch sources {
+        case [.spotlight, .walk]: "Found by Spotlight and the folder scan"
+        case .spotlight: "Found by Spotlight only"
+        default: "Found by the folder scan only"
+        }
     }
 }

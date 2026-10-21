@@ -18,6 +18,8 @@ public struct SearchOptions: Sendable {
     /// Only files of these types are searched; empty means all files. Folders are never
     /// returned while a type filter is set.
     public var fileTypes: Set<FileCategory> = []
+    /// Which engines `HybridSearcher` runs.
+    public var engines: SearchSources = [.spotlight, .walk]
 
     public init(roots: [URL]) { self.roots = roots }
 }
@@ -30,14 +32,31 @@ public struct SearchResult: Identifiable, Hashable, Sendable {
     public let modified: Date?
     public let matchedContent: Bool
     public let category: FileCategory?
+    /// The engine that reported this result first; see `SearchEvent.sourcesAdded` for later ones.
+    public let sources: SearchSources
 
     public var name: String { url.lastPathComponent }
     public var folder: String { url.deletingLastPathComponent().path }
 }
 
+/// The engines that can find a result.
+public struct SearchSources: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    public static let spotlight = SearchSources(rawValue: 1)
+    public static let walk = SearchSources(rawValue: 2)
+}
+
 public enum SearchEvent: Sendable {
+    /// Results not reported before.
     case results([SearchResult])
+    /// Results already reported that another engine also found.
+    case sourcesAdded([URL], SearchSources)
     case progress(scanned: Int, folder: String)
+    /// One engine is done; `count` is how many results it found.
+    case engineFinished(SearchSources, count: Int)
+    /// Something the user should know, e.g. why Spotlight was not used.
+    case notice(String)
     case finished(scanned: Int)
 }
 
@@ -127,7 +146,8 @@ public enum FileSearcher {
     private static func makeResult(_ url: URL, _ values: URLResourceValues?, matchedContent: Bool) -> SearchResult {
         SearchResult(url: url, isDirectory: values?.isDirectory ?? false,
                      size: values?.fileSize.map(Int64.init), modified: values?.contentModificationDate,
-                     matchedContent: matchedContent, category: values?.isDirectory == true ? nil : FileCategory(url: url))
+                     matchedContent: matchedContent, category: values?.isDirectory == true ? nil : FileCategory(url: url),
+                     sources: .walk)
     }
 
     /// Drops duplicate roots and roots nested inside another root.
