@@ -2,12 +2,12 @@ import Foundation
 
 /// Common file types, identified by file extension.
 public enum FileCategory: String, CaseIterable, Identifiable, Sendable {
-    case word, excel, powerpoint, pdf, text, log, image, video, audio, archive
+    case word, excel, powerpoint, pdf, text, markdown, html, log, image, video, audio, archive
 
     public var id: String { rawValue }
 
     /// The preset offered as "Common Files".
-    public static let common: Set<FileCategory> = [.word, .excel, .powerpoint, .pdf, .text, .log, .image, .video]
+    public static let common: Set<FileCategory> = [.word, .excel, .powerpoint, .pdf, .text, .markdown, .log, .image, .video]
 
     public var title: String {
         switch self {
@@ -16,6 +16,8 @@ public enum FileCategory: String, CaseIterable, Identifiable, Sendable {
         case .powerpoint: "PowerPoint"
         case .pdf: "PDF"
         case .text: "Text"
+        case .markdown: "Markdown"
+        case .html: "HTML"
         case .log: "Log"
         case .image: "Images"
         case .video: "Video"
@@ -31,7 +33,9 @@ public enum FileCategory: String, CaseIterable, Identifiable, Sendable {
         case .excel: ["xlsx", "xls", "xlsm", "xlsb", "xltx", "csv", "ods", "numbers"]
         case .powerpoint: ["pptx", "ppt", "pptm", "ppsx", "pps", "potx", "odp", "key"]
         case .pdf: ["pdf"]
-        case .text: ["txt", "text", "md", "markdown", "json", "xml", "yaml", "yml", "ini", "cfg", "conf"]
+        case .text: ["txt", "text", "json", "xml", "yaml", "yml", "ini", "cfg", "conf"]
+        case .markdown: ["md", "markdown", "mdx"]
+        case .html: ["html", "htm", "xhtml"]
         case .log: ["log"]
         case .image: ["jpg", "jpeg", "png", "gif", "heic", "heif", "tif", "tiff", "bmp", "webp", "svg",
                       "psd", "ico", "dng", "cr2", "cr3", "nef", "arw", "raf", "orf"]

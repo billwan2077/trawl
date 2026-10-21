@@ -14,6 +14,8 @@ struct TypeGlyph: View {
         case .category(.excel): tile("X", Color(red: 0.06, green: 0.49, blue: 0.25))
         case .category(.powerpoint): tile("P", Color(red: 0.77, green: 0.24, blue: 0.11))
         case .category(.pdf): tile("PDF", Color(red: 0.82, green: 0.20, blue: 0.22))
+        case .category(.markdown): tile("MD", Color(red: 0.16, green: 0.18, blue: 0.21))
+        case .category(.html): tile("</>", Color(red: 0.89, green: 0.31, blue: 0.15))
         case .category(.text): symbol("doc.text.fill", Color(red: 0.36, green: 0.45, blue: 0.58))
         case .category(.log): symbol("list.bullet.rectangle.portrait.fill", Color(red: 0.45, green: 0.45, blue: 0.48))
         case .category(.image): symbol("photo.fill", Color(red: 0.0, green: 0.55, blue: 0.62))

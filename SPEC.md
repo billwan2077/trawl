@@ -51,8 +51,8 @@ Regex mode: the whole query is one ICU regular expression, matched anywhere.
 - Search inside packages/bundles such as `.app` (off by default).
 - Include folders in results (on by default, name matches only).
 - File types (toolbar "Types" menu): All Files, the Common Files preset (Word, Excel,
-  PowerPoint, PDF, Text, Log, Images, Video), or any mix of Word, Excel, PowerPoint, PDF,
-  Text, Log, Images, Video, Audio, Archives. Types are decided by file extension. While a
+  PowerPoint, PDF, Text, Markdown, Log, Images, Video), or any mix of Word, Excel,
+  PowerPoint, PDF, Text, Markdown, HTML, Log, Images, Video, Audio, Archives. Types are decided by file extension. While a
   type filter is set, only files of those types are checked and folders are not returned.
 - Search engine (Options menu): Spotlight + Folder Scan (default), Folder Scan Only, or
   Spotlight Only. See "Spotlight" below.

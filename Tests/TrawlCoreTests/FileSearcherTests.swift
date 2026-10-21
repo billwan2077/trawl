@@ -82,6 +82,8 @@ final class FileSearcherTests: XCTestCase {
         XCTAssertEqual(FileCategory(fileExtension: "PPTX"), .powerpoint)
         XCTAssertEqual(FileCategory(url: URL(fileURLWithPath: "/a/photo.heic")), .image)
         XCTAssertEqual(FileCategory(url: URL(fileURLWithPath: "/a/clip.mov")), .video)
+        XCTAssertEqual(FileCategory(fileExtension: "MD"), .markdown)
+        XCTAssertEqual(FileCategory(fileExtension: "htm"), .html)
         XCTAssertNil(FileCategory(fileExtension: "swift"))
         XCTAssertNil(FileCategory(fileExtension: ""))
     }
