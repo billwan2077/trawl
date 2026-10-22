@@ -144,3 +144,18 @@ The icon is drawn in code: `./scripts/make-icon.sh` regenerates `Assets/AppIcon.
   by the folder scan, which reads plain-text files.
 - The app is not notarized and is intended for personal use; distributing it to other Macs
   requires a Developer ID certificate and notarization.
+
+## License
+
+Trawl is open source under the [MIT License](LICENSE).
+
+You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the
+software, for personal or commercial purposes, provided the copyright notice and the license
+text are included with all copies or substantial portions of it. The software is provided
+"as is", without warranty of any kind; the authors are not liable for any claim or damage
+arising from its use.
+
+Trawl is an independent project and is not affiliated with or endorsed by Apple, Microsoft,
+or DEVONtechnologies. Spotlight and macOS are trademarks of Apple Inc.; Word, Excel, and
+PowerPoint are trademarks of Microsoft Corporation; EasyFind is a product of
+DEVONtechnologies.
